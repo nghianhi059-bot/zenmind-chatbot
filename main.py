@@ -1,4 +1,3 @@
-from fastapi.middleware.cors import CORSMiddleware
 import os
 import datetime
 from fastapi import FastAPI, HTTPException
@@ -7,14 +6,15 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
+# 1. KHAI BÁO CƠ CHẾ BẢO MẬT CORS
+from fastapi.middleware.cors import CORSMiddleware
+
 # Import class AI do chính bạn viết
 from emotion_engine import EmotionEngine
 
 # ==========================================
 # 1. CẤU HÌNH CƠ SỞ DỮ LIỆU POSTGRESQL
 # ==========================================
-# Sử dụng os.getenv để lấy biến môi trường từ Docker, nếu không có sẽ tự lấy URL mặc định.
-# Lưu ý: Chữ 'db' trong chuỗi kết nối chính là tên dịch vụ database trong docker-compose.yml
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://user_admin:password123@db:5432/zenmind_db")
 
 engine = create_engine(DATABASE_URL)
@@ -33,19 +33,23 @@ class EmotionHistory(Base):
     score = Column(Float)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-# Lệnh này sẽ tự động kiểm tra và tạo bảng trong Database nếu nó chưa tồn tại
+# Tự động tạo bảng
 Base.metadata.create_all(bind=engine)
 
 # ==========================================
 # 3. KHỞI TẠO MÁY CHỦ API (FASTAPI)
 # ==========================================
 app = FastAPI(title="ZenMind AI Sentiment API")
+
+# --- CẤU HÌNH QUAN TRỌNG: CHO PHÉP FRONTEND TRUY CẬP ---
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"], 
-    allow_methods=["*"],
-    allow_headers=["*"],
-# Cấu trúc dữ liệu yêu cầu từ người dùng gửi lên
+    allow_origins=["*"],  # Cho phép tất cả các nguồn (bao gồm GitHub Pages)
+    allow_credentials=True,
+    allow_methods=["*"],  # Cho phép tất cả các phương thức (GET, POST,...)
+    allow_headers=["*"],  # Cho phép tất cả các tiêu đề
+)
+
 class UserInput(BaseModel):
     message: str
 
@@ -54,21 +58,22 @@ class UserInput(BaseModel):
 # ==========================================
 @app.post("/analyze-emotion")
 async def analyze_and_save(data: UserInput):
-    # Kiểm tra tin nhắn trống
     if not data.message:
         raise HTTPException(status_code=400, detail="Tin nhắn không được để trống")
 
-    # Gọi "Bộ não AI" phân tích câu chữ của người dùng
+    # Phân tích cảm xúc
     analysis = EmotionEngine.analyze_text(data.message)
 
-    # Lên kịch bản phản hồi dựa vào tâm trạng
+    # Lên kịch bản phản hồi
     response_text = ""
     if analysis['label'] == "Buồn/Lo âu":
         response_text = "Mình cảm nhận được bạn đang có chút tâm sự. Bạn cứ bình tĩnh nói thêm nhé..."
+    elif analysis['label'] == "Tích cực/Vui vẻ":
+        response_text = "Thật tuyệt vời khi nghe điều đó! Hãy giữ vững năng lượng này nhé!"
     else:
         response_text = "Cảm ơn bạn đã chia sẻ, mình đang lắng nghe đây!"
 
-    # Mở kết nối Database và lưu lịch sử chat vào PostgreSQL
+    # Lưu vào Database
     db = SessionLocal()
     try:
         new_entry = EmotionHistory(
@@ -79,10 +84,8 @@ async def analyze_and_save(data: UserInput):
         db.add(new_entry)
         db.commit()
     finally:
-        # Luôn đảm bảo đóng kết nối để không bị tràn bộ nhớ
         db.close()
 
-    # Trả về kết quả
     return {
         "emotion": analysis,
         "bot_response": response_text,
