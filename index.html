@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ZenMind AI Chatbot</title>
+    <style>
+        :root { --primary: #6e8efb; --bg: #f5f7fa; }
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        #chat-container { width: 400px; height: 600px; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
+        #header { background: var(--primary); color: white; padding: 20px; text-align: center; font-weight: bold; font-size: 1.2rem; }
+        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
+        .msg { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 0.95rem; line-height: 1.4; }
+        .user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
+        .bot { align-self: flex-start; background: #e9ecef; color: #333; border-bottom-left-radius: 2px; }
+        #input-area { padding: 20px; display: flex; gap: 10px; border-top: 1px solid #eee; }
+        input { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 20px; outline: none; }
+        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; transition: 0.3s; }
+        button:hover { opacity: 0.8; }
+    </style>
+</head>
+<body>
+
+<div id="chat-container">
+    <div id="header">🧘 ZenMind AI Assistant</div>
+    <div id="chat-box" id="chatBox">
+        <div class="msg bot">Chào bạn! Mình là ZenMind. Hôm nay bạn cảm thấy thế nào?</div>
+    </div>
+    <div id="input-area">
+        <input type="text" id="userInput" placeholder="Nhập tâm sự của bạn...">
+        <button onclick="sendMessage()">Gửi</button>
+    </div>
+</div>
+
+<script>
+    // THAY LINK NÀY BẰNG LINK RENDER CỦA BẠN
+    const API_URL = "https://zenmind-chatbot.onrender.com/analyze-emotion";
+
+    async function sendMessage() {
+        const input = document.getElementById('userInput');
+        const chatBox = document.getElementById('chat-box');
+        const message = input.value.trim();
+        
+        if (!message) return;
+
+        // Hiển thị tin nhắn người dùng
+        chatBox.innerHTML += `<div class="msg user">${message}</div>`;
+        input.value = '';
+        chatBox.scrollTop = chatBox.scrollHeight;
+
+        try {
+            const response = await fetch(API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ message: message })
+            });
+            const data = await response.json();
+            
+            // Hiển thị câu trả lời của Bot
+            chatBox.innerHTML += `<div class="msg bot">${data.bot_response}</div>`;
+        } catch (error) {
+            chatBox.innerHTML += `<div class="msg bot" style="color:red">Lỗi: Không thể kết nối tới Server.</div>`;
+        }
+        chatBox.scrollTop = chatBox.scrollHeight;
+    }
+
+    // Gửi bằng phím Enter
+    document.getElementById('userInput').addEventListener('keypress', function (e) {
+        if (e.key === 'Enter') sendMessage();
+    });
+</script>
+</body>
+</html>

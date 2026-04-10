@@ -1,3 +1,4 @@
+from fastapi.middleware.cors import CORSMiddleware
 import os
 import datetime
 from fastapi import FastAPI, HTTPException
@@ -39,7 +40,11 @@ Base.metadata.create_all(bind=engine)
 # 3. KHỞI TẠO MÁY CHỦ API (FASTAPI)
 # ==========================================
 app = FastAPI(title="ZenMind AI Sentiment API")
-
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_methods=["*"],
+    allow_headers=["*"],
 # Cấu trúc dữ liệu yêu cầu từ người dùng gửi lên
 class UserInput(BaseModel):
     message: str
