@@ -1,0 +1,29 @@
+
+services:
+  # Dịch vụ Cơ sở dữ liệu
+  db:
+    image: postgres:15
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: user_admin
+      POSTGRES_PASSWORD: password123
+      POSTGRES_DB: zenmind_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  # Dịch vụ Web API (CHÚ Ý: Chữ 'web:' phải thẳng hàng với chữ 'db:')
+  web:
+    build: .
+    container_name: fastapi_app
+    ports:
+      - "8000:8000"
+    environment:
+      - DATABASE_URL=postgresql://user_admin:password123@db:5432/zenmind_db
+    depends_on:
+      - db
+
+volumes:
+  postgres_data:
