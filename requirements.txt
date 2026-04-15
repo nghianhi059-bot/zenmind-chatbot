@@ -5,4 +5,7 @@ psycopg2-binary
 underthesea
 pydantic
 google-generativeai
-
+passlib
+bcrypt
+PyJWT
+python-multipart
