@@ -6,10 +6,11 @@ from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session
 
-# 1. KHAI BÁO CƠ CHẾ BẢO MẬT CORS
+# 1. BẢO MẬT CORS VÀ THƯ VIỆN AI GEMINI
 from fastapi.middleware.cors import CORSMiddleware
+import google.generativeai as genai
 
-# Import class AI do chính bạn viết
+# Import class AI cũ để lấy Nhãn Cảm Xúc lưu vào Database
 from emotion_engine import EmotionEngine
 
 # ==========================================
@@ -33,7 +34,6 @@ class EmotionHistory(Base):
     score = Column(Float)
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
 
-# Tự động tạo bảng
 Base.metadata.create_all(bind=engine)
 
 # ==========================================
@@ -41,39 +41,56 @@ Base.metadata.create_all(bind=engine)
 # ==========================================
 app = FastAPI(title="ZenMind AI Sentiment API")
 
-# --- CẤU HÌNH QUAN TRỌNG: CHO PHÉP FRONTEND TRUY CẬP ---
+# CẤU HÌNH CORS CHO FRONTEND GITHUB PAGES
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Cho phép tất cả các nguồn (bao gồm GitHub Pages)
+    allow_origins=["*"],  
     allow_credentials=True,
-    allow_methods=["*"],  # Cho phép tất cả các phương thức (GET, POST,...)
-    allow_headers=["*"],  # Cho phép tất cả các tiêu đề
+    allow_methods=["*"],  
+    allow_headers=["*"],  
 )
 
 class UserInput(BaseModel):
     message: str
 
 # ==========================================
-# 4. API CHÍNH: XỬ LÝ VÀ PHẢN HỒI
+# 4. API CHÍNH: XỬ LÝ VÀ PHẢN HỒI (TÍCH HỢP GEMINI)
 # ==========================================
 @app.post("/analyze-emotion")
 async def analyze_and_save(data: UserInput):
     if not data.message:
         raise HTTPException(status_code=400, detail="Tin nhắn không được để trống")
 
-    # Phân tích cảm xúc
+    # BƯỚC 1: Lấy nhãn cảm xúc từ hàm cũ để phân loại và lưu Database
     analysis = EmotionEngine.analyze_text(data.message)
 
-    # Lên kịch bản phản hồi
-    response_text = ""
-    if analysis['label'] == "Buồn/Lo âu":
-        response_text = "Mình cảm nhận được bạn đang có chút tâm sự. Bạn cứ bình tĩnh nói thêm nhé..."
-    elif analysis['label'] == "Tích cực/Vui vẻ":
-        response_text = "Thật tuyệt vời khi nghe điều đó! Hãy giữ vững năng lượng này nhé!"
-    else:
-        response_text = "Cảm ơn bạn đã chia sẻ, mình đang lắng nghe đây!"
+    # BƯỚC 2: Gọi não bộ Gemini để sinh câu trả lời thấu cảm
+    try:
+        # Lấy Key từ biến môi trường của Render (mặc định để rỗng nếu chưa cài)
+        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
+        
+        if not GEMINI_API_KEY:
+            response_text = "Hình như bạn chưa cấp API Key cho mình trên Render thì phải? Bạn kiểm tra lại nhé!"
+        else:
+            genai.configure(api_key=GEMINI_API_KEY)
+            
+            # Khởi tạo model Gemini 1.5 Flash
+            model = genai.GenerativeModel('gemini-1.5-flash')
+            
+            # Kịch bản ám thị (Prompt) cho Bot
+            prompt = f"""Bạn là ZenMind, một AI tư vấn tâm lý nhẹ nhàng, thấu cảm. 
+            Người dùng vừa nói: '{data.message}'. 
+            Cảm xúc của họ đang nghiêng về: '{analysis['label']}'. 
+            Hãy trả lời họ bằng 2-3 câu ngắn gọn, ấm áp, thấu hiểu và gợi mở bằng tiếng Việt. Không dùng các ký tự in đậm hay in nghiêng."""
+            
+            gemini_response = model.generate_content(prompt)
+            response_text = gemini_response.text
+            
+    except Exception as e:
+        print(f"Lỗi Gemini: {e}") 
+        response_text = "Hiện tại tâm trí mình đang hơi bối rối do lỗi kết nối mạng, bạn chờ mình một lát rồi nhắn lại nhé!"
 
-    # Lưu vào Database
+    # BƯỚC 3: Lưu vào Database
     db = SessionLocal()
     try:
         new_entry = EmotionHistory(
@@ -86,6 +103,7 @@ async def analyze_and_save(data: UserInput):
     finally:
         db.close()
 
+    # BƯỚC 4: Trả kết quả về cho Frontend
     return {
         "emotion": analysis,
         "bot_response": response_text,
