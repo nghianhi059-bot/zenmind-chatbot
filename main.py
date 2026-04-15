@@ -20,7 +20,6 @@ from emotion_engine import EmotionEngine
 SECRET_KEY = "zenmind_super_secret_key_nghia" 
 ALGORITHM = "HS256"
 
-# Cấu hình mã hóa mật khẩu
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -30,27 +29,23 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # ==========================================
-# 2. ĐỊNH NGHĨA DATABASE (CẬP NHẬT MỚI)
+# 2. ĐỊNH NGHĨA DATABASE
 # ==========================================
 class User(Base):
     __tablename__ = "users_v2" 
-    
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    
     histories = relationship("EmotionHistory", back_populates="owner")
 
 class EmotionHistory(Base):
     __tablename__ = "emotion_history_v2"
-    
     id = Column(Integer, primary_key=True, index=True)
     message = Column(String)
     label = Column(String)
     score = Column(Float)
     bot_reply = Column(String) 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    
     owner_id = Column(Integer, ForeignKey("users_v2.id"))
     owner = relationship("User", back_populates="histories")
 
@@ -61,7 +56,7 @@ Base.metadata.create_all(bind=engine)
 # ==========================================
 app = FastAPI(title="ZenMind AI Sentiment API (Secured)")
 
-# ĐÃ SỬA LỖI CORS Ở ĐÂY (allow_credentials=False)
+# CẤU HÌNH CORS CHUẨN: allow_credentials PHẢI LÀ FALSE KHI DÙNG "*"
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -121,7 +116,7 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     return user
 
 # ==========================================
-# 5. API CHAT VÀ LẤY LỊCH SỬ (ĐÃ BẢO VỆ)
+# 5. API CHAT VÀ LẤY LỊCH SỬ
 # ==========================================
 class UserInput(BaseModel):
     message: str
@@ -136,13 +131,15 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
     try:
         GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
         genai.configure(api_key=GEMINI_API_KEY)
+        # Sử dụng model gemini-1.5-flash ổn định nhất
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"Bạn là ZenMind, AI tư vấn tâm lý. Người dùng {current_user.username} vừa nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
         gemini_response = model.generate_content(prompt)
         response_text = gemini_response.text
     except Exception as e:
-        response_text = f"Lỗi kết nối não bộ rồi Nghĩa ơi: {str(e)}"
+        # In trực tiếp lỗi để dễ dàng debug nếu còn trục trặc
+        response_text = f"Lỗi kết nối não bộ: {str(e)}"
 
     new_entry = EmotionHistory(
         message=data.message, 
