@@ -142,7 +142,7 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
         gemini_response = model.generate_content(prompt)
         response_text = gemini_response.text
     except Exception as e:
-        response_text = "Hiện tại tâm trí mình đang bối rối, bạn chờ mình lát nhé!"
+        response_text = f"Lỗi kết nối não bộ rồi Nghĩa ơi: {str(e)}"
 
     new_entry = EmotionHistory(
         message=data.message, 
