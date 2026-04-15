@@ -6,6 +6,6 @@ underthesea
 pydantic
 google-generativeai
 passlib
-bcrypt
+bcrypt==3.2.2
 PyJWT
 python-multipart
