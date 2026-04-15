@@ -3,60 +3,191 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZenMind AI Chatbot</title>
+    <title>ZenMind AI - Đăng nhập</title>
     <style>
-        :root { --primary: #6e8efb; --bg: #f5f7fa; }
+        :root { --primary: #6e8efb; --bg: #f5f7fa; --text: #333; }
         body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
-        #chat-container { width: 400px; height: 600px; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; }
-        #header { background: var(--primary); color: white; padding: 20px; text-align: center; font-weight: bold; font-size: 1.2rem; }
-        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; }
-        .msg { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 0.95rem; line-height: 1.4; }
+        
+        /* Hộp thoại chung */
+        .box-container { width: 400px; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; display: none; flex-direction: column; }
+        .active { display: flex; } /* Lớp dùng để bật tắt màn hình */
+
+        /* Giao diện Auth (Đăng nhập/Đăng ký) */
+        #auth-container { padding: 40px 30px; text-align: center; }
+        #auth-container h2 { color: var(--primary); margin-bottom: 20px; }
+        .input-group { margin-bottom: 15px; }
+        .input-group input { width: 90%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; }
+        .auth-btn { width: 100%; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; }
+        .toggle-text { margin-top: 15px; font-size: 0.9rem; color: #666; cursor: pointer; text-decoration: underline; }
+
+        /* Giao diện Chat */
+        #chat-container { height: 600px; }
+        #header { background: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
+        #logout-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+        
+        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #fafafa; }
+        .msg { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 0.95rem; line-height: 1.4; word-wrap: break-word; }
         .user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
         .bot { align-self: flex-start; background: #e9ecef; color: #333; border-bottom-left-radius: 2px; }
-        #input-area { padding: 20px; display: flex; gap: 10px; border-top: 1px solid #eee; }
-        input { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 20px; outline: none; }
-        button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; transition: 0.3s; }
-        button:hover { opacity: 0.8; }
+        
+        #input-area { padding: 15px; display: flex; gap: 10px; border-top: 1px solid #eee; background: white; }
+        #input-area input { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 20px; outline: none; }
+        #input-area button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
     </style>
 </head>
 <body>
 
-<div id="chat-container">
-    <div id="header">🧘 ZenMind AI Assistant</div>
-    <div id="chat-box" id="chatBox">
-        <div class="msg bot">Chào bạn! Mình là ZenMind. Hôm nay bạn cảm thấy thế nào?</div>
+    <div id="auth-container" class="box-container active">
+        <h2 id="auth-title">Đăng Nhập ZenMind</h2>
+        <div class="input-group">
+            <input type="text" id="username" placeholder="Tên đăng nhập" required>
+        </div>
+        <div class="input-group">
+            <input type="password" id="password" placeholder="Mật khẩu" required>
+        </div>
+        <button class="auth-btn" id="auth-submit-btn" onclick="submitAuth()">Đăng Nhập</button>
+        <div class="toggle-text" onclick="toggleAuthMode()" id="auth-toggle">Chưa có tài khoản? Đăng ký ngay</div>
+        <p id="auth-msg" style="color: red; font-size: 0.85rem; margin-top: 10px;"></p>
     </div>
-    <div id="input-area">
-        <input type="text" id="userInput" placeholder="Nhập tâm sự của bạn...">
-        <button onclick="sendMessage()">Gửi</button>
+
+    <div id="chat-container" class="box-container">
+        <div id="header">
+            <span>🧘 ZenMind AI</span>
+            <button id="logout-btn" onclick="logout()">Đăng xuất</button>
+        </div>
+        <div id="chat-box">
+            </div>
+        <div id="input-area">
+            <input type="text" id="userInput" placeholder="Nhập tâm sự của bạn...">
+            <button onclick="sendMessage()">Gửi</button>
+        </div>
     </div>
-</div>
 
 <script>
-    // THAY LINK NÀY BẰNG LINK RENDER CỦA BẠN
-    const API_URL = "https://zenmind-chatbot.onrender.com/analyze-emotion";
+    const API_BASE = "https://zenmind-chatbot.onrender.com";
+    let isLoginMode = true; // Biến theo dõi đang ở màn Đăng nhập hay Đăng ký
 
+    // Kiểm tra xem đã có Token chưa khi vừa vào web
+    window.onload = () => {
+        const token = localStorage.getItem("zenmind_token");
+        if (token) {
+            showChatScreen();
+            loadHistory(); // Tải lịch sử chat
+        }
+    };
+
+    // Chuyển đổi giữa Đăng nhập và Đăng ký
+    function toggleAuthMode() {
+        isLoginMode = !isLoginMode;
+        document.getElementById("auth-title").innerText = isLoginMode ? "Đăng Nhập ZenMind" : "Đăng Ký Tài Khoản";
+        document.getElementById("auth-submit-btn").innerText = isLoginMode ? "Đăng Nhập" : "Đăng Ký";
+        document.getElementById("auth-toggle").innerText = isLoginMode ? "Chưa có tài khoản? Đăng ký ngay" : "Đã có tài khoản? Đăng nhập";
+        document.getElementById("auth-msg").innerText = "";
+    }
+
+    // Gửi yêu cầu Đăng nhập hoặc Đăng ký
+    async function submitAuth() {
+        const user = document.getElementById("username").value.trim();
+        const pass = document.getElementById("password").value.trim();
+        const msgBox = document.getElementById("auth-msg");
+
+        if (!user || !pass) { msgBox.innerText = "Vui lòng nhập đủ thông tin!"; return; }
+        msgBox.innerText = "Đang xử lý...";
+
+        try {
+            if (isLoginMode) {
+                // Đăng nhập cần gửi dạng Form Data (OAuth2)
+                const formData = new URLSearchParams();
+                formData.append("username", user);
+                formData.append("password", pass);
+
+                const res = await fetch(`${API_BASE}/login`, { method: "POST", body: formData });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    localStorage.setItem("zenmind_token", data.access_token); // Lưu token vào trình duyệt
+                    showChatScreen();
+                    loadHistory();
+                } else {
+                    msgBox.innerText = data.detail || "Đăng nhập thất bại!";
+                }
+            } else {
+                // Đăng ký gửi dạng JSON
+                const res = await fetch(`${API_BASE}/register`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ username: user, password: pass })
+                });
+                const data = await res.json();
+                
+                if (res.ok) {
+                    msgBox.style.color = "green";
+                    msgBox.innerText = "Đăng ký thành công! Hãy đăng nhập.";
+                    setTimeout(() => { toggleAuthMode(); msgBox.style.color = "red"; }, 1500);
+                } else {
+                    msgBox.innerText = data.detail || "Đăng ký thất bại!";
+                }
+            }
+        } catch (error) {
+            msgBox.innerText = "Lỗi kết nối tới máy chủ!";
+        }
+    }
+
+    // Tải lịch sử chat
+    async function loadHistory() {
+        const token = localStorage.getItem("zenmind_token");
+        const chatBox = document.getElementById("chat-box");
+        chatBox.innerHTML = '<div class="msg bot">Đang tải lịch sử trò chuyện...</div>';
+
+        try {
+            const res = await fetch(`${API_BASE}/history`, {
+                headers: { "Authorization": `Bearer ${token}` } // Kẹp Token vào để chứng minh thân phận
+            });
+            if (!res.ok) throw new Error("Hết hạn đăng nhập");
+            
+            const history = await res.json();
+            chatBox.innerHTML = '<div class="msg bot">Chào mừng bạn quay lại! Hôm nay bạn thế nào?</div>';
+            
+            history.forEach(chat => {
+                chatBox.innerHTML += `<div class="msg user">${chat.message}</div>`;
+                if (chat.bot_reply) {
+                    chatBox.innerHTML += `<div class="msg bot">${chat.bot_reply}</div>`;
+                }
+            });
+            chatBox.scrollTop = chatBox.scrollHeight;
+        } catch (error) {
+            logout(); // Nếu token sai hoặc hết hạn thì bắt đăng nhập lại
+        }
+    }
+
+    // Gửi tin nhắn chat
     async function sendMessage() {
         const input = document.getElementById('userInput');
         const chatBox = document.getElementById('chat-box');
         const message = input.value.trim();
+        const token = localStorage.getItem("zenmind_token");
         
         if (!message) return;
 
-        // Hiển thị tin nhắn người dùng
         chatBox.innerHTML += `<div class="msg user">${message}</div>`;
         input.value = '';
         chatBox.scrollTop = chatBox.scrollHeight;
 
         try {
-            const response = await fetch(API_URL, {
+            const response = await fetch(`${API_BASE}/analyze-emotion`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}` // Bắt buộc phải có thẻ tên mới được chat
+                },
                 body: JSON.stringify({ message: message })
             });
-            const data = await response.json();
             
-            // Hiển thị câu trả lời của Bot
+            if (response.status === 401) {
+                logout(); return;
+            }
+
+            const data = await response.json();
             chatBox.innerHTML += `<div class="msg bot">${data.bot_response}</div>`;
         } catch (error) {
             chatBox.innerHTML += `<div class="msg bot" style="color:red">Lỗi: Không thể kết nối tới Server.</div>`;
@@ -64,10 +195,25 @@
         chatBox.scrollTop = chatBox.scrollHeight;
     }
 
-    // Gửi bằng phím Enter
-    document.getElementById('userInput').addEventListener('keypress', function (e) {
-        if (e.key === 'Enter') sendMessage();
-    });
+    // Tiện ích: Nhấn Enter để gửi
+    document.getElementById('userInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
+    document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') submitAuth(); });
+
+    // Đổi giao diện
+    function showChatScreen() {
+        document.getElementById("auth-container").classList.remove("active");
+        document.getElementById("chat-container").classList.add("active");
+    }
+
+    // Đăng xuất
+    function logout() {
+        localStorage.removeItem("zenmind_token"); // Xóa token
+        document.getElementById("chat-container").classList.remove("active");
+        document.getElementById("auth-container").classList.add("active");
+        document.getElementById("username").value = "";
+        document.getElementById("password").value = "";
+        document.getElementById("auth-msg").innerText = "";
+    }
 </script>
 </body>
 </html>
