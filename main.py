@@ -17,7 +17,7 @@ from emotion_engine import EmotionEngine
 # ==========================================
 # 1. CẤU HÌNH BẢO MẬT & DATABASE
 # ==========================================
-SECRET_KEY = "zenmind_super_secret_key_nghia" # Khóa bí mật để tạo Token
+SECRET_KEY = "zenmind_super_secret_key_nghia" 
 ALGORITHM = "HS256"
 
 # Cấu hình mã hóa mật khẩu
@@ -32,18 +32,15 @@ Base = declarative_base()
 # ==========================================
 # 2. ĐỊNH NGHĨA DATABASE (CẬP NHẬT MỚI)
 # ==========================================
-# Bảng Người Dùng
 class User(Base):
-    __tablename__ = "users_v2" # Tạo bảng mới để tránh lỗi dữ liệu cũ
+    __tablename__ = "users_v2" 
     
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
     
-    # Mối quan hệ: 1 User có nhiều lịch sử
     histories = relationship("EmotionHistory", back_populates="owner")
 
-# Bảng Lịch sử Chat (Có thêm Chủ sở hữu)
 class EmotionHistory(Base):
     __tablename__ = "emotion_history_v2"
     
@@ -51,10 +48,9 @@ class EmotionHistory(Base):
     message = Column(String)
     label = Column(String)
     score = Column(Float)
-    bot_reply = Column(String) # Lưu luôn câu trả lời của Bot
+    bot_reply = Column(String) 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
     
-    # Khóa ngoại nối với bảng User
     owner_id = Column(Integer, ForeignKey("users_v2.id"))
     owner = relationship("User", back_populates="histories")
 
@@ -65,15 +61,15 @@ Base.metadata.create_all(bind=engine)
 # ==========================================
 app = FastAPI(title="ZenMind AI Sentiment API (Secured)")
 
+# ĐÃ SỬA LỖI CORS Ở ĐÂY (allow_credentials=False)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
-    allow_credentials=True,
+    allow_credentials=False, 
     allow_methods=["*"],  
     allow_headers=["*"],  
 )
 
-# Hàm hỗ trợ lấy Session DB
 def get_db():
     db = SessionLocal()
     try:
@@ -90,12 +86,10 @@ class UserCreate(BaseModel):
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    # Kiểm tra xem user đã tồn tại chưa
     db_user = db.query(User).filter(User.username == user.username).first()
     if db_user:
         raise HTTPException(status_code=400, detail="Tên đăng nhập đã được sử dụng")
     
-    # Mã hóa mật khẩu và lưu
     hashed_password = pwd_context.hash(user.password)
     new_user = User(username=user.username, hashed_password=hashed_password)
     db.add(new_user)
@@ -105,16 +99,13 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 @app.post("/login")
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
-    # Kiểm tra mật khẩu
     if not user or not pwd_context.verify(form_data.password, user.hashed_password):
         raise HTTPException(status_code=400, detail="Sai tên đăng nhập hoặc mật khẩu")
     
-    # Tạo Token
     token_data = {"sub": user.username}
     token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": token, "token_type": "bearer"}
 
-# Hàm xác thực Token của người dùng (Bảo vệ API)
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
@@ -136,7 +127,6 @@ class UserInput(BaseModel):
     message: str
 
 @app.post("/analyze-emotion")
-# Thêm current_user vào hàm để bắt buộc phải có Token mới được gọi
 async def analyze_and_save(data: UserInput, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     if not data.message:
         raise HTTPException(status_code=400, detail="Tin nhắn không được để trống")
@@ -154,7 +144,6 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
     except Exception as e:
         response_text = "Hiện tại tâm trí mình đang bối rối, bạn chờ mình lát nhé!"
 
-    # Lưu vào Database với ID của người dùng
     new_entry = EmotionHistory(
         message=data.message, 
         label=analysis['label'], 
@@ -167,9 +156,7 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
 
     return {"emotion": analysis, "bot_response": response_text}
 
-# API mới: Lấy lịch sử chat của riêng người dùng đó
 @app.get("/history")
 def get_user_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Tìm tất cả tin nhắn thuộc về user_id này
     history = db.query(EmotionHistory).filter(EmotionHistory.owner_id == current_user.id).order_by(EmotionHistory.created_at.asc()).all()
     return history
