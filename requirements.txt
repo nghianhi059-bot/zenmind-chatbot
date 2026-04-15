@@ -2,10 +2,10 @@ fastapi
 uvicorn
 sqlalchemy
 psycopg2-binary
-underthesea
 pydantic
-google-generativeai
-passlib
+google-generativeai>=0.5.0
+underthesea
+passlib[bcrypt]
 bcrypt==3.2.2
 PyJWT
 python-multipart
