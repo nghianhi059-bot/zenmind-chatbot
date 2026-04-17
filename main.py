@@ -135,7 +135,7 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
         # CHỖ SỬA QUAN TRỌNG: Thêm transport='rest' để tránh lỗi 404 trên Render
         genai.configure(api_key=GEMINI_API_KEY, transport='rest')
         
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         
         prompt = f"Bạn là ZenMind, AI tư vấn tâm lý. Người dùng {current_user.username} vừa nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
         gemini_response = model.generate_content(prompt)
