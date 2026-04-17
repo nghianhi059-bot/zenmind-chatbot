@@ -3,217 +3,331 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ZenMind AI - Đăng nhập</title>
+    <title>ZenMind AI - Tư vấn tâm lý</title>
     <style>
-        :root { --primary: #6e8efb; --bg: #f5f7fa; --text: #333; }
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; }
+        /* === THIẾT LẬP CHUNG === */
+        :root {
+            --bg-color: #ffffff;
+            --sidebar-bg: #f0f4f9;
+            --text-main: #202124;
+            --text-muted: #5f6368;
+            --primary: #1a73e8;
+            --bot-bubble: #f0f4f9;
+            --user-bubble: #e3f2fd;
+        }
+        body { margin: 0; font-family: 'Segoe UI', Tahoma, sans-serif; color: var(--text-main); background-color: var(--bg-color); overflow: hidden; }
         
-        /* Hộp thoại chung */
-        .box-container { width: 400px; background: white; border-radius: 20px; box-shadow: 0 10px 25px rgba(0,0,0,0.1); overflow: hidden; display: none; flex-direction: column; }
-        .active { display: flex; } /* Lớp dùng để bật tắt màn hình */
+        /* === MÀN HÌNH ĐĂNG NHẬP === */
+        #authScreen { display: flex; height: 100vh; align-items: center; justify-content: center; background-color: var(--sidebar-bg); }
+        .auth-card { background: white; padding: 40px; border-radius: 16px; box-shadow: 0 4px 12px rgba(0,0,0,0.05); width: 100%; max-width: 360px; text-align: center; }
+        .auth-card h2 { margin-top: 0; color: var(--primary); margin-bottom: 24px;}
+        .auth-card input { width: 90%; padding: 12px 16px; margin-bottom: 16px; border: 1px solid #dadce0; border-radius: 8px; font-size: 14px; outline: none;}
+        .auth-card input:focus { border-color: var(--primary); }
+        .auth-card button { width: 100%; padding: 12px; background-color: var(--primary); color: white; border: none; border-radius: 8px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s;}
+        .auth-card button:hover { background-color: #1557b0; }
+        .switch-mode { margin-top: 16px; font-size: 13px; color: var(--text-muted); cursor: pointer; text-decoration: underline; }
 
-        /* Giao diện Auth (Đăng nhập/Đăng ký) */
-        #auth-container { padding: 40px 30px; text-align: center; }
-        #auth-container h2 { color: var(--primary); margin-bottom: 20px; }
-        .input-group { margin-bottom: 15px; }
-        .input-group input { width: 90%; padding: 12px; border: 1px solid #ddd; border-radius: 10px; outline: none; }
-        .auth-btn { width: 100%; background: var(--primary); color: white; border: none; padding: 12px; border-radius: 10px; cursor: pointer; font-weight: bold; margin-top: 10px; }
-        .toggle-text { margin-top: 15px; font-size: 0.9rem; color: #666; cursor: pointer; text-decoration: underline; }
+        /* === MÀN HÌNH CHAT (APP) === */
+        #appScreen { display: none; height: 100vh; display: flex; }
+        
+        /* Sidebar */
+        .sidebar { width: 260px; background-color: var(--sidebar-bg); padding: 20px; display: flex; flex-direction: column; transition: transform 0.3s ease; }
+        .new-chat-btn { background-color: #e8eaed; border-radius: 24px; padding: 12px 20px; cursor: pointer; font-weight: 500; display: inline-flex; align-items: center; gap: 10px; width: fit-content; transition: 0.2s; }
+        .new-chat-btn:hover { background-color: #dadce0; }
+        .history-list { margin-top: 30px; font-size: 14px; color: var(--text-muted); flex: 1; overflow-y: auto;}
+        .logout-btn { padding: 10px; text-align: center; color: #d93025; cursor: pointer; font-weight: 500; border-radius: 8px;}
+        .logout-btn:hover { background-color: #fce8e6; }
 
-        /* Giao diện Chat */
-        #chat-container { height: 600px; }
-        #header { background: var(--primary); color: white; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; font-weight: bold; }
-        #logout-btn { background: rgba(255,255,255,0.2); border: none; color: white; padding: 5px 10px; border-radius: 5px; cursor: pointer; }
+        /* Khu vực Chat chính */
+        .chat-area { flex: 1; display: flex; flex-direction: column; position: relative; }
+        .chat-header { padding: 20px 24px; font-size: 1.2rem; color: var(--text-muted); border-bottom: 1px solid #f0f4f9; display: flex; justify-content: space-between; align-items: center;}
         
-        #chat-box { flex: 1; padding: 20px; overflow-y: auto; display: flex; flex-direction: column; gap: 10px; background: #fafafa; }
-        .msg { max-width: 80%; padding: 10px 15px; border-radius: 15px; font-size: 0.95rem; line-height: 1.4; word-wrap: break-word; }
-        .user { align-self: flex-end; background: var(--primary); color: white; border-bottom-right-radius: 2px; }
-        .bot { align-self: flex-start; background: #e9ecef; color: #333; border-bottom-left-radius: 2px; }
+        /* Khung chứa tin nhắn */
+        .messages-container { flex: 1; overflow-y: auto; padding: 30px 15%; display: flex; flex-direction: column; gap: 24px; scroll-behavior: smooth; }
+        .message { display: flex; gap: 16px; max-width: 85%; animation: fadeIn 0.3s ease-in-out;}
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+        .message.user { align-self: flex-end; flex-direction: row-reverse; }
         
-        #input-area { padding: 15px; display: flex; gap: 10px; border-top: 1px solid #eee; background: white; }
-        #input-area input { flex: 1; border: 1px solid #ddd; padding: 10px; border-radius: 20px; outline: none; }
-        #input-area button { background: var(--primary); color: white; border: none; padding: 10px 20px; border-radius: 20px; cursor: pointer; }
+        .message .avatar { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: bold; flex-shrink: 0; color: white;}
+        .message.bot .avatar { background-color: #10a37f; }
+        .message.user .avatar { background-color: var(--primary); }
+        
+        .message .text { padding: 12px 18px; border-radius: 18px; line-height: 1.6; font-size: 15px; color: var(--text-main); }
+        .message.bot .text { background-color: var(--bot-bubble); border-top-left-radius: 4px; }
+        .message.user .text { background-color: var(--user-bubble); border-top-right-radius: 4px; }
+
+        /* Ô nhập liệu lơ lửng */
+        .input-area { padding: 20px 15%; background: linear-gradient(to top, white 80%, transparent); }
+        .input-box { display: flex; background-color: var(--sidebar-bg); border-radius: 30px; padding: 8px 16px; align-items: center; box-shadow: 0 2px 6px rgba(0,0,0,0.05);}
+        .input-box input { flex: 1; border: none; background: transparent; outline: none; font-size: 15px; padding: 10px; }
+        .input-box button { background: none; border: none; color: var(--primary); cursor: pointer; padding: 8px; border-radius: 50%; display: flex; align-items: center; }
+        .input-box button:hover { background-color: #e8eaed; }
+        .input-box button:disabled { color: #ccc; cursor: not-allowed; }
+
+        /* Responsive cho Mobile */
+        @media (max-width: 768px) {
+            .sidebar { display: none; }
+            .messages-container, .input-area { padding-left: 20px; padding-right: 20px; }
+            .message { max-width: 95%; }
+        }
     </style>
 </head>
 <body>
 
-    <div id="auth-container" class="box-container active">
-        <h2 id="auth-title">Đăng Nhập ZenMind</h2>
-        <div class="input-group">
-            <input type="text" id="username" placeholder="Tên đăng nhập" required>
+    <div id="authScreen">
+        <div class="auth-card">
+            <h2 id="authTitle">Đăng Nhập ZenMind</h2>
+            <input type="text" id="username" placeholder="Tên đăng nhập">
+            <input type="password" id="password" placeholder="Mật khẩu">
+            <button id="authBtn" onclick="handleAuth()">Đăng Nhập</button>
+            <p id="authMsg" style="color: red; font-size: 13px; margin-top: 10px;"></p>
+            <div class="switch-mode" onclick="toggleAuthMode()">Chưa có tài khoản? Đăng ký ngay</div>
         </div>
-        <div class="input-group">
-            <input type="password" id="password" placeholder="Mật khẩu" required>
-        </div>
-        <button class="auth-btn" id="auth-submit-btn" onclick="submitAuth()">Đăng Nhập</button>
-        <div class="toggle-text" onclick="toggleAuthMode()" id="auth-toggle">Chưa có tài khoản? Đăng ký ngay</div>
-        <p id="auth-msg" style="color: red; font-size: 0.85rem; margin-top: 10px;"></p>
     </div>
 
-    <div id="chat-container" class="box-container">
-        <div id="header">
-            <span>🧘 ZenMind AI</span>
-            <button id="logout-btn" onclick="logout()">Đăng xuất</button>
-        </div>
-        <div id="chat-box">
+    <div id="appScreen">
+        <aside class="sidebar">
+            <div class="new-chat-btn" onclick="clearChat()">
+                <span style="font-size: 20px; line-height: 1;">+</span> Đoạn chat mới
             </div>
-        <div id="input-area">
-            <input type="text" id="userInput" placeholder="Nhập tâm sự của bạn...">
-            <button onclick="sendMessage()">Gửi</button>
-        </div>
+            <div class="history-list">
+                <p style="font-weight: bold; color: #202124;">Lịch sử trò chuyện</p>
+                <div id="historyItems" style="font-size: 13px; margin-top: 15px; opacity: 0.8;">
+                    (Đã tải lại lịch sử cũ)
+                </div>
+            </div>
+            <div class="logout-btn" onclick="logout()">Đăng xuất</div>
+        </aside>
+
+        <main class="chat-area">
+            <header class="chat-header">
+                <div style="font-weight: 600;">ZenMind AI ✨</div>
+                <div style="font-size: 13px; background: #e3f2fd; color: #1a73e8; padding: 4px 12px; border-radius: 12px;" id="userWelcome"></div>
+            </header>
+            
+            <div class="messages-container" id="chatBox">
+                </div>
+
+            <div class="input-area">
+                <div class="input-box">
+                    <input type="text" id="chatInput" placeholder="Nhập tâm sự của bạn vào đây..." onkeypress="handleEnter(event)">
+                    <button id="sendBtn" onclick="sendMessage()">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"/></svg>
+                    </button>
+                </div>
+                <div style="text-align: center; font-size: 11px; color: #9aa0a6; margin-top: 10px;">ZenMind có thể mắc sai lầm. Hãy kiểm tra lại thông tin quan trọng.</div>
+            </div>
+        </main>
     </div>
 
-<script>
-    const API_BASE = "https://zenmind-chatbot.onrender.com";
-    let isLoginMode = true; // Biến theo dõi đang ở màn Đăng nhập hay Đăng ký
+    <script>
+        const API_URL = "https://zenmind-chatbot.onrender.com";
+        let isLoginMode = true;
+        let currentUser = "";
 
-    // Kiểm tra xem đã có Token chưa khi vừa vào web
-    window.onload = () => {
-        const token = localStorage.getItem("zenmind_token");
-        if (token) {
-            showChatScreen();
-            loadHistory(); // Tải lịch sử chat
-        }
-    };
-
-    // Chuyển đổi giữa Đăng nhập và Đăng ký
-    function toggleAuthMode() {
-        isLoginMode = !isLoginMode;
-        document.getElementById("auth-title").innerText = isLoginMode ? "Đăng Nhập ZenMind" : "Đăng Ký Tài Khoản";
-        document.getElementById("auth-submit-btn").innerText = isLoginMode ? "Đăng Nhập" : "Đăng Ký";
-        document.getElementById("auth-toggle").innerText = isLoginMode ? "Chưa có tài khoản? Đăng ký ngay" : "Đã có tài khoản? Đăng nhập";
-        document.getElementById("auth-msg").innerText = "";
-    }
-
-    // Gửi yêu cầu Đăng nhập hoặc Đăng ký
-    async function submitAuth() {
-        const user = document.getElementById("username").value.trim();
-        const pass = document.getElementById("password").value.trim();
-        const msgBox = document.getElementById("auth-msg");
-
-        if (!user || !pass) { msgBox.innerText = "Vui lòng nhập đủ thông tin!"; return; }
-        msgBox.innerText = "Đang xử lý...";
-
-        try {
-            if (isLoginMode) {
-                // Đăng nhập cần gửi dạng Form Data (OAuth2)
-                const formData = new URLSearchParams();
-                formData.append("username", user);
-                formData.append("password", pass);
-
-                const res = await fetch(`${API_BASE}/login`, { method: "POST", body: formData });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    localStorage.setItem("zenmind_token", data.access_token); // Lưu token vào trình duyệt
-                    showChatScreen();
-                    loadHistory();
-                } else {
-                    msgBox.innerText = data.detail || "Đăng nhập thất bại!";
-                }
+        // Kiểm tra xem đã đăng nhập chưa khi vừa vào web
+        window.onload = function() {
+            const token = localStorage.getItem("token");
+            currentUser = localStorage.getItem("username");
+            if (token && currentUser) {
+                showAppScreen();
             } else {
-                // Đăng ký gửi dạng JSON
-                const res = await fetch(`${API_BASE}/register`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ username: user, password: pass })
-                });
-                const data = await res.json();
-                
-                if (res.ok) {
-                    msgBox.style.color = "green";
-                    msgBox.innerText = "Đăng ký thành công! Hãy đăng nhập.";
-                    setTimeout(() => { toggleAuthMode(); msgBox.style.color = "red"; }, 1500);
+                showAuthScreen();
+            }
+        };
+
+        // UI Đổi qua lại Đăng nhập/Đăng ký
+        function toggleAuthMode() {
+            isLoginMode = !isLoginMode;
+            document.getElementById("authTitle").innerText = isLoginMode ? "Đăng Nhập ZenMind" : "Đăng Ký Tài Khoản";
+            document.getElementById("authBtn").innerText = isLoginMode ? "Đăng Nhập" : "Đăng Ký";
+            document.querySelector(".switch-mode").innerText = isLoginMode ? "Chưa có tài khoản? Đăng ký ngay" : "Đã có tài khoản? Đăng nhập";
+            document.getElementById("authMsg").innerText = "";
+        }
+
+        // Xử lý Gửi Đăng nhập hoặc Đăng ký
+        async function handleAuth() {
+            const u = document.getElementById("username").value;
+            const p = document.getElementById("password").value;
+            const msg = document.getElementById("authMsg");
+
+            if (!u || !p) { msg.innerText = "Vui lòng nhập đủ thông tin!"; return; }
+            document.getElementById("authBtn").disabled = true;
+            document.getElementById("authBtn").innerText = "Đang xử lý...";
+
+            try {
+                if (isLoginMode) {
+                    // ĐĂNG NHẬP
+                    const formData = new URLSearchParams();
+                    formData.append("username", u);
+                    formData.append("password", p);
+                    
+                    const res = await fetch(`${API_URL}/login`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                        body: formData
+                    });
+                    const data = await res.json();
+                    
+                    if (res.ok) {
+                        localStorage.setItem("token", data.access_token);
+                        localStorage.setItem("username", u);
+                        currentUser = u;
+                        showAppScreen();
+                    } else {
+                        msg.innerText = data.detail || "Sai thông tin!";
+                    }
                 } else {
-                    msgBox.innerText = data.detail || "Đăng ký thất bại!";
+                    // ĐĂNG KÝ
+                    const res = await fetch(`${API_URL}/register`, {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ username: u, password: p })
+                    });
+                    const data = await res.json();
+                    
+                    if (res.ok) {
+                        msg.style.color = "green";
+                        msg.innerText = "Đăng ký thành công! Hãy đăng nhập.";
+                        setTimeout(toggleAuthMode, 1500);
+                    } else {
+                        msg.innerText = data.detail || "Lỗi đăng ký!";
+                    }
                 }
+            } catch (error) {
+                msg.innerText = "Lỗi kết nối máy chủ!";
             }
-        } catch (error) {
-            msgBox.innerText = "Lỗi kết nối tới máy chủ!";
+            document.getElementById("authBtn").disabled = false;
+            document.getElementById("authBtn").innerText = isLoginMode ? "Đăng Nhập" : "Đăng Ký";
         }
-    }
 
-    // Tải lịch sử chat
-    async function loadHistory() {
-        const token = localStorage.getItem("zenmind_token");
-        const chatBox = document.getElementById("chat-box");
-        chatBox.innerHTML = '<div class="msg bot">Đang tải lịch sử trò chuyện...</div>';
+        // Chuyển đổi Màn hình
+        function showAuthScreen() {
+            document.getElementById("authScreen").style.display = "flex";
+            document.getElementById("appScreen").style.display = "none";
+            document.getElementById("appScreen").style.opacity = "0";
+        }
 
-        try {
-            const res = await fetch(`${API_BASE}/history`, {
-                headers: { "Authorization": `Bearer ${token}` } // Kẹp Token vào để chứng minh thân phận
-            });
-            if (!res.ok) throw new Error("Hết hạn đăng nhập");
+        function showAppScreen() {
+            document.getElementById("authScreen").style.display = "none";
+            document.getElementById("appScreen").style.display = "flex";
+            document.getElementById("appScreen").style.opacity = "1";
+            document.getElementById("userWelcome").innerText = `Chào, ${currentUser}`;
+            loadHistory();
+        }
+
+        function logout() {
+            localStorage.removeItem("token");
+            localStorage.removeItem("username");
+            clearChat();
+            showAuthScreen();
+        }
+
+        // Tải lịch sử chat
+        async function loadHistory() {
+            const token = localStorage.getItem("token");
+            const chatBox = document.getElementById("chatBox");
+            chatBox.innerHTML = ""; // Xóa trắng
             
-            const history = await res.json();
-            chatBox.innerHTML = '<div class="msg bot">Chào mừng bạn quay lại! Hôm nay bạn thế nào?</div>';
-            
-            history.forEach(chat => {
-                chatBox.innerHTML += `<div class="msg user">${chat.message}</div>`;
-                if (chat.bot_reply) {
-                    chatBox.innerHTML += `<div class="msg bot">${chat.bot_reply}</div>`;
+            try {
+                const res = await fetch(`${API_URL}/history`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const histories = await res.json();
+                    if(histories.length === 0) {
+                        appendMessage("bot", `Chào ${currentUser}, mình là ZenMind. Hôm nay bạn cảm thấy thế nào?`);
+                    } else {
+                        histories.forEach(h => {
+                            appendMessage("user", h.message);
+                            appendMessage("bot", h.bot_reply);
+                        });
+                    }
                 }
-            });
+            } catch (e) {
+                appendMessage("bot", "Chưa thể tải lại lịch sử cũ, nhưng chúng ta có thể trò chuyện ngay bây giờ.");
+            }
+        }
+
+        // Tạo bong bóng chat mới
+        function appendMessage(sender, text) {
+            const chatBox = document.getElementById("chatBox");
+            const msgDiv = document.createElement("div");
+            msgDiv.className = `message ${sender}`;
+            
+            const avatar = document.createElement("div");
+            avatar.className = "avatar";
+            avatar.innerText = sender === "bot" ? "Z" : currentUser.charAt(0).toUpperCase();
+
+            const textDiv = document.createElement("div");
+            textDiv.className = "text";
+            // Chuyển đổi \n thành <br> để xuống dòng đẹp mắt
+            textDiv.innerHTML = text.replace(/\n/g, '<br>');
+
+            msgDiv.appendChild(avatar);
+            msgDiv.appendChild(textDiv);
+            chatBox.appendChild(msgDiv);
+            
+            // Tự động cuộn xuống cuối
             chatBox.scrollTop = chatBox.scrollHeight;
-        } catch (error) {
-            logout(); // Nếu token sai hoặc hết hạn thì bắt đăng nhập lại
         }
-    }
 
-    // Gửi tin nhắn chat
-    async function sendMessage() {
-        const input = document.getElementById('userInput');
-        const chatBox = document.getElementById('chat-box');
-        const message = input.value.trim();
-        const token = localStorage.getItem("zenmind_token");
-        
-        if (!message) return;
+        function clearChat() {
+            document.getElementById("chatBox").innerHTML = "";
+            appendMessage("bot", "Chúng ta bắt đầu một cuộc trò chuyện mới nhé!");
+        }
 
-        chatBox.innerHTML += `<div class="msg user">${message}</div>`;
-        input.value = '';
-        chatBox.scrollTop = chatBox.scrollHeight;
+        function handleEnter(e) {
+            if (e.key === "Enter") sendMessage();
+        }
 
-        try {
-            const response = await fetch(`${API_BASE}/analyze-emotion`, {
-                method: 'POST',
-                headers: { 
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}` // Bắt buộc phải có thẻ tên mới được chat
-                },
-                body: JSON.stringify({ message: message })
-            });
+        // Gửi tin nhắn lên Server
+        async function sendMessage() {
+            const input = document.getElementById("chatInput");
+            const btn = document.getElementById("sendBtn");
+            const text = input.value.trim();
+            const token = localStorage.getItem("token");
             
-            if (response.status === 401) {
-                logout(); return;
+            if (!text) return;
+
+            appendMessage("user", text);
+            input.value = "";
+            input.disabled = true;
+            btn.disabled = true;
+
+            // Thêm hiệu ứng Bot đang gõ...
+            const typingId = "typing-" + Date.now();
+            const chatBox = document.getElementById("chatBox");
+            chatBox.insertAdjacentHTML('beforeend', `<div class="message bot" id="${typingId}"><div class="avatar">Z</div><div class="text">Đang suy nghĩ...</div></div>`);
+            chatBox.scrollTop = chatBox.scrollHeight;
+
+            try {
+                const res = await fetch(`${API_URL}/analyze-emotion`, {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ message: text })
+                });
+                
+                // Xóa hiệu ứng đang gõ
+                document.getElementById(typingId).remove();
+
+                if (res.status === 401) { logout(); return; }
+                
+                const data = await res.json();
+                appendMessage("bot", data.bot_response);
+                
+            } catch (error) {
+                document.getElementById(typingId).remove();
+                appendMessage("bot", "Xin lỗi, máy chủ đang bận. Bạn thử lại nhé!");
             }
-
-            const data = await response.json();
-            chatBox.innerHTML += `<div class="msg bot">${data.bot_response}</div>`;
-        } catch (error) {
-            chatBox.innerHTML += `<div class="msg bot" style="color:red">Lỗi: Không thể kết nối tới Server.</div>`;
+            
+            input.disabled = false;
+            btn.disabled = false;
+            input.focus();
         }
-        chatBox.scrollTop = chatBox.scrollHeight;
-    }
-
-    // Tiện ích: Nhấn Enter để gửi
-    document.getElementById('userInput').addEventListener('keypress', e => { if (e.key === 'Enter') sendMessage(); });
-    document.getElementById('password').addEventListener('keypress', e => { if (e.key === 'Enter') submitAuth(); });
-
-    // Đổi giao diện
-    function showChatScreen() {
-        document.getElementById("auth-container").classList.remove("active");
-        document.getElementById("chat-container").classList.add("active");
-    }
-
-    // Đăng xuất
-    function logout() {
-        localStorage.removeItem("zenmind_token"); // Xóa token
-        document.getElementById("chat-container").classList.remove("active");
-        document.getElementById("auth-container").classList.add("active");
-        document.getElementById("username").value = "";
-        document.getElementById("password").value = "";
-        document.getElementById("auth-msg").innerText = "";
-    }
-</script>
+    </script>
 </body>
 </html>
