@@ -20,6 +20,7 @@ from emotion_engine import EmotionEngine
 SECRET_KEY = "zenmind_super_secret_key_nghia" 
 ALGORITHM = "HS256"
 
+# Cấu hình mã hóa mật khẩu
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -29,7 +30,7 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # ==========================================
-# 2. ĐỊNH NGHĨA DATABASE
+# 2. ĐỊNH NGHĨA DATABASE (CẬP NHẬT MỚI)
 # ==========================================
 class User(Base):
     __tablename__ = "users_v2" 
@@ -56,7 +57,7 @@ Base.metadata.create_all(bind=engine)
 # ==========================================
 app = FastAPI(title="ZenMind AI Sentiment API (Secured)")
 
-# CẤU HÌNH CORS CHUẨN: allow_credentials PHẢI LÀ FALSE KHI DÙNG "*"
+# Cấu hình CORS: allow_credentials=False là bắt buộc khi dùng allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -130,16 +131,18 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
 
     try:
         GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-        genai.configure(api_key=GEMINI_API_KEY)
-        # Sử dụng model gemini-1.5-flash ổn định nhất
+        
+        # CHỖ SỬA QUAN TRỌNG: Thêm transport='rest' để tránh lỗi 404 trên Render
+        genai.configure(api_key=GEMINI_API_KEY, transport='rest')
+        
         model = genai.GenerativeModel('gemini-1.5-flash')
         
         prompt = f"Bạn là ZenMind, AI tư vấn tâm lý. Người dùng {current_user.username} vừa nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
         gemini_response = model.generate_content(prompt)
         response_text = gemini_response.text
     except Exception as e:
-        # In trực tiếp lỗi để dễ dàng debug nếu còn trục trặc
-        response_text = f"Lỗi kết nối não bộ: {str(e)}"
+        # In lỗi chi tiết để Nghĩa có thể xem trực tiếp trên màn hình chat
+        response_text = f"Lỗi não bộ (REST): {str(e)}"
 
     new_entry = EmotionHistory(
         message=data.message, 
