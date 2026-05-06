@@ -162,7 +162,7 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
 
     try:
         genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-2.5-flash')
         knowledge_context = f"Kiến thức: {current_user.system_knowledge}." if current_user.system_knowledge else ""
         prompt = f"Bạn là ZenMind. {knowledge_context} Người dùng nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở."
         gemini_response = model.generate_content(prompt)
