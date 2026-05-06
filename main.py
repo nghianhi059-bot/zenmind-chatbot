@@ -185,7 +185,7 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
 
     try:
         genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""), transport='rest')
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # Nhồi kiến thức mới vào Prompt
         knowledge_context = f"Kiến thức bổ sung của bạn (nếu có): {current_user.system_knowledge}." if current_user.system_knowledge else ""
