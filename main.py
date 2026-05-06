@@ -15,7 +15,7 @@ from passlib.context import CryptContext
 from emotion_engine import EmotionEngine
 
 # ==========================================
-# 1. CẤU HÌNH BẢO MẬT & DATABASE
+# CẤU HÌNH BẢO MẬT & DATABASE
 # ==========================================
 SECRET_KEY = "zenmind_super_secret_key_nghia" 
 ALGORITHM = "HS256"
@@ -28,15 +28,12 @@ engine = create_engine(DATABASE_URL)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
-# ==========================================
-# 2. ĐỊNH NGHĨA DATABASE (PHIÊN BẢN V3 - CÓ SESSIONS)
-# ==========================================
 class User(Base):
     __tablename__ = "users_v3" 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    system_knowledge = Column(String, default="") # Nơi lưu kiến thức riêng cho Bot
+    system_knowledge = Column(String, default="")
     sessions = relationship("ChatSession", back_populates="owner")
 
 class ChatSession(Base):
@@ -62,9 +59,6 @@ class EmotionHistory(Base):
 
 Base.metadata.create_all(bind=engine)
 
-# ==========================================
-# 3. KHỞI TẠO MÁY CHỦ API
-# ==========================================
 app = FastAPI(title="ZenMind AI v3")
 
 app.add_middleware(
@@ -82,9 +76,6 @@ def get_db():
     finally:
         db.close()
 
-# ==========================================
-# 4. HỆ THỐNG ĐĂNG KÝ, ĐĂNG NHẬP & XÁC THỰC
-# ==========================================
 class UserCreate(BaseModel):
     username: str
     password: str
@@ -116,9 +107,6 @@ def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(
     except:
         raise HTTPException(status_code=401, detail="Token không hợp lệ")
 
-# ==========================================
-# 5. API QUẢN LÝ KIẾN THỨC BOT (KNOWLEDGE BASE)
-# ==========================================
 class KnowledgeInput(BaseModel):
     knowledge: str
 
@@ -126,15 +114,12 @@ class KnowledgeInput(BaseModel):
 def update_knowledge(data: KnowledgeInput, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     current_user.system_knowledge = data.knowledge
     db.commit()
-    return {"message": "Đã cập nhật kiến thức cho Bot", "knowledge": current_user.system_knowledge}
+    return {"message": "Đã cập nhật", "knowledge": current_user.system_knowledge}
 
 @app.get("/knowledge")
 def get_knowledge(current_user: User = Depends(get_current_user)):
     return {"knowledge": current_user.system_knowledge}
 
-# ==========================================
-# 6. API QUẢN LÝ ĐOẠN CHAT (SESSIONS)
-# ==========================================
 class SessionUpdate(BaseModel):
     title: str = None
     is_pinned: bool = None
@@ -154,7 +139,6 @@ def get_sessions(current_user: User = Depends(get_current_user), db: Session = D
 @app.put("/sessions/{session_id}")
 def update_session(session_id: int, data: SessionUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.owner_id == current_user.id).first()
-    if not session: raise HTTPException(status_code=404, detail="Không tìm thấy đoạn chat")
     if data.title is not None: session.title = data.title
     if data.is_pinned is not None: session.is_pinned = data.is_pinned
     db.commit()
@@ -163,14 +147,10 @@ def update_session(session_id: int, data: SessionUpdate, current_user: User = De
 @app.delete("/sessions/{session_id}")
 def delete_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.owner_id == current_user.id).first()
-    if not session: raise HTTPException(status_code=404, detail="Không tìm thấy")
     db.delete(session)
     db.commit()
     return {"message": "Đã xóa đoạn chat"}
 
-# ==========================================
-# 7. API CHAT & NHẮN TIN (ĐÃ FIX LỖI GEMINI)
-# ==========================================
 class UserInput(BaseModel):
     message: str
     session_id: int
@@ -178,18 +158,13 @@ class UserInput(BaseModel):
 @app.post("/analyze-emotion")
 async def analyze_and_save(data: UserInput, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     session = db.query(ChatSession).filter(ChatSession.id == data.session_id, ChatSession.owner_id == current_user.id).first()
-    if not session: raise HTTPException(status_code=404, detail="Phiên chat không hợp lệ")
-
     analysis = EmotionEngine.analyze_text(data.message)
 
     try:
-        # Cấu hình "sạch", đã bỏ transport='rest' và dùng bản latest
         genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        
-        knowledge_context = f"Kiến thức bổ sung của bạn (nếu có): {current_user.system_knowledge}." if current_user.system_knowledge else ""
-        prompt = f"Bạn là ZenMind. {knowledge_context} Người dùng nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
-        
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        knowledge_context = f"Kiến thức: {current_user.system_knowledge}." if current_user.system_knowledge else ""
+        prompt = f"Bạn là ZenMind. {knowledge_context} Người dùng nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở."
         gemini_response = model.generate_content(prompt)
         response_text = gemini_response.text
     except Exception as e:
@@ -197,14 +172,39 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
 
     new_entry = EmotionHistory(message=data.message, label=analysis['label'], score=analysis['score'], bot_reply=response_text, session_id=session.id)
     db.add(new_entry)
-    
-    # Tự động đổi tên đoạn chat nếu đây là tin nhắn đầu tiên
     if db.query(EmotionHistory).filter(EmotionHistory.session_id == session.id).count() == 1:
-        session.title = data.message[:25] + "..." if len(data.message) > 25 else data.message
-        
+        session.title = data.message[:25]
     db.commit()
     return {"emotion": analysis, "bot_response": response_text}
 
 @app.get("/sessions/{session_id}/history")
 def get_session_history(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     return db.query(EmotionHistory).filter(EmotionHistory.session_id == session_id).order_by(EmotionHistory.created_at.asc()).all()
+
+# ==========================================
+# CÔNG CỤ CHUẨN ĐOÁN LỖI BÍ MẬT
+# ==========================================
+@app.get("/kiem-tra-api")
+def kiem_tra():
+    api_key = os.getenv("GEMINI_API_KEY", "")
+    if not api_key:
+        return {"TrangThai": "LỖI", "NguyenNhan": "Render chưa nhận được API KEY. Biến môi trường đang bị bỏ trống!"}
+    
+    # Chỉ hiện vài ký tự đầu và cuối để bảo mật
+    masked_key = api_key[:10] + "......" + api_key[-4:] if len(api_key) > 15 else api_key
+    
+    try:
+        genai.configure(api_key=api_key)
+        models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+        
+        return {
+            "TrangThai": "KẾT NỐI THÀNH CÔNG TỚI GOOGLE", 
+            "API_Key_Dang_Dung": masked_key, 
+            "Cac_Model_Duoc_Phep_Dung": models
+        }
+    except Exception as e:
+        return {
+            "TrangThai": "KẾT NỐI THẤT BẠI", 
+            "API_Key_Dang_Dung": masked_key, 
+            "ChiTietLoi": str(e)
+        }
