@@ -3,7 +3,7 @@ import datetime
 from fastapi import FastAPI, HTTPException, Depends, status
 from fastapi.security import OAuth2PasswordBearer, OAuth2PasswordRequestForm
 from pydantic import BaseModel
-from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Float, DateTime, ForeignKey, Boolean
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker, Session, relationship
 
@@ -20,7 +20,6 @@ from emotion_engine import EmotionEngine
 SECRET_KEY = "zenmind_super_secret_key_nghia" 
 ALGORITHM = "HS256"
 
-# Cấu hình mã hóa mật khẩu
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
@@ -30,34 +29,44 @@ SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 
 # ==========================================
-# 2. ĐỊNH NGHĨA DATABASE (CẬP NHẬT MỚI)
+# 2. ĐỊNH NGHĨA DATABASE (PHIÊN BẢN V3 - CÓ SESSIONS)
 # ==========================================
 class User(Base):
-    __tablename__ = "users_v2" 
+    __tablename__ = "users_v3" 
     id = Column(Integer, primary_key=True, index=True)
     username = Column(String, unique=True, index=True)
     hashed_password = Column(String)
-    histories = relationship("EmotionHistory", back_populates="owner")
+    system_knowledge = Column(String, default="") # Nơi lưu kiến thức riêng cho Bot
+    sessions = relationship("ChatSession", back_populates="owner")
+
+class ChatSession(Base):
+    __tablename__ = "chat_sessions_v3"
+    id = Column(Integer, primary_key=True, index=True)
+    title = Column(String, default="Đoạn chat mới")
+    is_pinned = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.datetime.utcnow)
+    owner_id = Column(Integer, ForeignKey("users_v3.id"))
+    owner = relationship("User", back_populates="sessions")
+    messages = relationship("EmotionHistory", back_populates="session", cascade="all, delete")
 
 class EmotionHistory(Base):
-    __tablename__ = "emotion_history_v2"
+    __tablename__ = "emotion_history_v3"
     id = Column(Integer, primary_key=True, index=True)
     message = Column(String)
     label = Column(String)
     score = Column(Float)
     bot_reply = Column(String) 
     created_at = Column(DateTime, default=datetime.datetime.utcnow)
-    owner_id = Column(Integer, ForeignKey("users_v2.id"))
-    owner = relationship("User", back_populates="histories")
+    session_id = Column(Integer, ForeignKey("chat_sessions_v3.id"))
+    session = relationship("ChatSession", back_populates="messages")
 
 Base.metadata.create_all(bind=engine)
 
 # ==========================================
 # 3. KHỞI TẠO MÁY CHỦ API
 # ==========================================
-app = FastAPI(title="ZenMind AI Sentiment API (Secured)")
+app = FastAPI(title="ZenMind AI v3")
 
-# Cấu hình CORS: allow_credentials=False là bắt buộc khi dùng allow_origins=["*"]
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],  
@@ -74,7 +83,7 @@ def get_db():
         db.close()
 
 # ==========================================
-# 4. HỆ THỐNG ĐĂNG KÝ & ĐĂNG NHẬP
+# 4. HỆ THỐNG ĐĂNG KÝ, ĐĂNG NHẬP & XÁC THỰC
 # ==========================================
 class UserCreate(BaseModel):
     username: str
@@ -82,10 +91,8 @@ class UserCreate(BaseModel):
 
 @app.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
-    db_user = db.query(User).filter(User.username == user.username).first()
-    if db_user:
-        raise HTTPException(status_code=400, detail="Tên đăng nhập đã được sử dụng")
-    
+    if db.query(User).filter(User.username == user.username).first():
+        raise HTTPException(status_code=400, detail="Tên đăng nhập đã tồn tại")
     hashed_password = pwd_context.hash(user.password)
     new_user = User(username=user.username, hashed_password=hashed_password)
     db.add(new_user)
@@ -96,67 +103,109 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
 def login(form_data: OAuth2PasswordRequestForm = Depends(), db: Session = Depends(get_db)):
     user = db.query(User).filter(User.username == form_data.username).first()
     if not user or not pwd_context.verify(form_data.password, user.hashed_password):
-        raise HTTPException(status_code=400, detail="Sai tên đăng nhập hoặc mật khẩu")
-    
-    token_data = {"sub": user.username}
-    token = jwt.encode(token_data, SECRET_KEY, algorithm=ALGORITHM)
+        raise HTTPException(status_code=400, detail="Sai thông tin")
+    token = jwt.encode({"sub": user.username}, SECRET_KEY, algorithm=ALGORITHM)
     return {"access_token": token, "token_type": "bearer"}
 
 def get_current_user(token: str = Depends(oauth2_scheme), db: Session = Depends(get_db)):
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        username: str = payload.get("sub")
-        if username is None:
-            raise HTTPException(status_code=401, detail="Token không hợp lệ")
-    except jwt.PyJWTError:
+        user = db.query(User).filter(User.username == payload.get("sub")).first()
+        if not user: raise Exception()
+        return user
+    except:
         raise HTTPException(status_code=401, detail="Token không hợp lệ")
-    
-    user = db.query(User).filter(User.username == username).first()
-    if user is None:
-        raise HTTPException(status_code=401, detail="Người dùng không tồn tại")
-    return user
 
 # ==========================================
-# 5. API CHAT VÀ LẤY LỊCH SỬ
+# 5. API QUẢN LÝ KIẾN THỨC BOT (KNOWLEDGE BASE)
+# ==========================================
+class KnowledgeInput(BaseModel):
+    knowledge: str
+
+@app.post("/knowledge")
+def update_knowledge(data: KnowledgeInput, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    current_user.system_knowledge = data.knowledge
+    db.commit()
+    return {"message": "Đã cập nhật kiến thức cho Bot", "knowledge": current_user.system_knowledge}
+
+@app.get("/knowledge")
+def get_knowledge(current_user: User = Depends(get_current_user)):
+    return {"knowledge": current_user.system_knowledge}
+
+# ==========================================
+# 6. API QUẢN LÝ ĐOẠN CHAT (SESSIONS)
+# ==========================================
+class SessionUpdate(BaseModel):
+    title: str = None
+    is_pinned: bool = None
+
+@app.post("/sessions")
+def create_session(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    new_session = ChatSession(owner_id=current_user.id)
+    db.add(new_session)
+    db.commit()
+    db.refresh(new_session)
+    return new_session
+
+@app.get("/sessions")
+def get_sessions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    # Lấy danh sách ưu tiên: Đã ghim lên trước, sau đó xếp theo ngày tạo mới nhất
+    return db.query(ChatSession).filter(ChatSession.owner_id == current_user.id).order_by(ChatSession.is_pinned.desc(), ChatSession.created_at.desc()).all()
+
+@app.put("/sessions/{session_id}")
+def update_session(session_id: int, data: SessionUpdate, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.owner_id == current_user.id).first()
+    if not session: raise HTTPException(status_code=404, detail="Không tìm thấy đoạn chat")
+    if data.title is not None: session.title = data.title
+    if data.is_pinned is not None: session.is_pinned = data.is_pinned
+    db.commit()
+    return {"message": "Cập nhật thành công"}
+
+@app.delete("/sessions/{session_id}")
+def delete_session(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    session = db.query(ChatSession).filter(ChatSession.id == session_id, ChatSession.owner_id == current_user.id).first()
+    if not session: raise HTTPException(status_code=404, detail="Không tìm thấy")
+    db.delete(session)
+    db.commit()
+    return {"message": "Đã xóa đoạn chat"}
+
+# ==========================================
+# 7. API CHAT & NHẮN TIN (ĐÃ TÍCH HỢP KIẾN THỨC)
 # ==========================================
 class UserInput(BaseModel):
     message: str
+    session_id: int
 
 @app.post("/analyze-emotion")
 async def analyze_and_save(data: UserInput, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    if not data.message:
-        raise HTTPException(status_code=400, detail="Tin nhắn không được để trống")
+    session = db.query(ChatSession).filter(ChatSession.id == data.session_id, ChatSession.owner_id == current_user.id).first()
+    if not session: raise HTTPException(status_code=404, detail="Phiên chat không hợp lệ")
 
     analysis = EmotionEngine.analyze_text(data.message)
 
     try:
-        GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
-        
-        # CHỖ SỬA QUAN TRỌNG: Thêm transport='rest' để tránh lỗi 404 trên Render
-        genai.configure(api_key=GEMINI_API_KEY, transport='rest')
-        
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""), transport='rest')
         model = genai.GenerativeModel('gemini-2.5-flash')
         
-        prompt = f"Bạn là ZenMind, AI tư vấn tâm lý. Người dùng {current_user.username} vừa nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
+        # Nhồi kiến thức mới vào Prompt
+        knowledge_context = f"Kiến thức bổ sung của bạn (nếu có): {current_user.system_knowledge}." if current_user.system_knowledge else ""
+        prompt = f"Bạn là ZenMind. {knowledge_context} Người dùng nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
+        
         gemini_response = model.generate_content(prompt)
         response_text = gemini_response.text
     except Exception as e:
-        # In lỗi chi tiết để Nghĩa có thể xem trực tiếp trên màn hình chat
-        response_text = f"Lỗi não bộ (REST): {str(e)}"
+        response_text = f"Lỗi não bộ: {str(e)}"
 
-    new_entry = EmotionHistory(
-        message=data.message, 
-        label=analysis['label'], 
-        score=analysis['score'],
-        bot_reply=response_text,
-        owner_id=current_user.id
-    )
+    new_entry = EmotionHistory(message=data.message, label=analysis['label'], score=analysis['score'], bot_reply=response_text, session_id=session.id)
     db.add(new_entry)
+    
+    # Tự động đổi tên đoạn chat nếu đây là tin nhắn đầu tiên
+    if db.query(EmotionHistory).filter(EmotionHistory.session_id == session.id).count() == 1:
+        session.title = data.message[:25] + "..." if len(data.message) > 25 else data.message
+        
     db.commit()
-
     return {"emotion": analysis, "bot_response": response_text}
 
-@app.get("/history")
-def get_user_history(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    history = db.query(EmotionHistory).filter(EmotionHistory.owner_id == current_user.id).order_by(EmotionHistory.created_at.asc()).all()
-    return history
+@app.get("/sessions/{session_id}/history")
+def get_session_history(session_id: int, current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
+    return db.query(EmotionHistory).filter(EmotionHistory.session_id == session_id).order_by(EmotionHistory.created_at.asc()).all()
