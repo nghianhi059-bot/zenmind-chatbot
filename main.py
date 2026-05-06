@@ -149,7 +149,6 @@ def create_session(current_user: User = Depends(get_current_user), db: Session =
 
 @app.get("/sessions")
 def get_sessions(current_user: User = Depends(get_current_user), db: Session = Depends(get_db)):
-    # Lấy danh sách ưu tiên: Đã ghim lên trước, sau đó xếp theo ngày tạo mới nhất
     return db.query(ChatSession).filter(ChatSession.owner_id == current_user.id).order_by(ChatSession.is_pinned.desc(), ChatSession.created_at.desc()).all()
 
 @app.put("/sessions/{session_id}")
@@ -170,7 +169,7 @@ def delete_session(session_id: int, current_user: User = Depends(get_current_use
     return {"message": "Đã xóa đoạn chat"}
 
 # ==========================================
-# 7. API CHAT & NHẮN TIN (ĐÃ TÍCH HỢP KIẾN THỨC)
+# 7. API CHAT & NHẮN TIN (ĐÃ FIX LỖI GEMINI)
 # ==========================================
 class UserInput(BaseModel):
     message: str
@@ -184,10 +183,10 @@ async def analyze_and_save(data: UserInput, current_user: User = Depends(get_cur
     analysis = EmotionEngine.analyze_text(data.message)
 
     try:
-        genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""), transport='rest')
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        # Cấu hình "sạch", đã bỏ transport='rest' và dùng bản latest
+        genai.configure(api_key=os.getenv("GEMINI_API_KEY", ""))
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
-        # Nhồi kiến thức mới vào Prompt
         knowledge_context = f"Kiến thức bổ sung của bạn (nếu có): {current_user.system_knowledge}." if current_user.system_knowledge else ""
         prompt = f"Bạn là ZenMind. {knowledge_context} Người dùng nói: '{data.message}'. Cảm xúc: '{analysis['label']}'. Hãy trả lời ấm áp, gợi mở bằng tiếng Việt."
         
